@@ -113,6 +113,7 @@ function AnimatedCurrency({ value }: { value: number }) {
       },
     });
     return () => {
+      previous.current = state.value;
       tween.kill();
     };
   }, [value]);
