@@ -1,8 +1,33 @@
+import { useEffect, useRef } from "react";
+import {
+  BarController,
+  BarElement,
+  CategoryScale,
+  Chart,
+  Legend,
+  LinearScale,
+  LineController,
+  LineElement,
+  PointElement,
+  Tooltip,
+} from "chart.js";
 import type {
   AffordabilityResult,
   ComparisonResult,
   ScenarioResult,
 } from "./calculations";
+
+Chart.register(
+  BarController,
+  BarElement,
+  CategoryScale,
+  Legend,
+  LinearScale,
+  LineController,
+  LineElement,
+  PointElement,
+  Tooltip,
+);
 
 const baht = new Intl.NumberFormat("th-TH", {
   style: "currency",
@@ -110,6 +135,160 @@ function ScenarioTable({
   );
 }
 
+function cumulative(initial: number, flow: number[]): number[] {
+  let total = initial;
+  return [total, ...flow.map((value) => (total += value))];
+}
+
+function categoryRows(result: ComparisonResult) {
+  const values = (scenario: ScenarioResult) => [
+    scenario.breakdown.acquisition + scenario.breakdown.resaleCredit,
+    scenario.breakdown.financeInterest + scenario.breakdown.fees,
+    scenario.breakdown.energy,
+    scenario.breakdown.fixed +
+      scenario.breakdown.periodic +
+      scenario.breakdown.lifestyle +
+      scenario.breakdown.custom,
+  ];
+  const labels = [
+    "ค่าเสื่อม",
+    "ดอกเบี้ยและค่าธรรมเนียม",
+    "พลังงาน",
+    "ดูแลและใช้งาน",
+  ];
+  const current = values(result.current);
+  const next = values(result.next);
+  return labels.map((label, index) => ({
+    label,
+    current: current[index],
+    next: next[index],
+  }));
+}
+
+function ComparisonCharts({ result }: { result: ComparisonResult }) {
+  const categories = categoryRows(result);
+  const currentCumulative = cumulative(
+    result.current.operating.oneTime,
+    result.current.monthlyCashFlow,
+  );
+  const nextCumulative = cumulative(
+    result.switchDayCash,
+    result.next.monthlyCashFlow,
+  );
+  const groupedRef = useRef<HTMLCanvasElement>(null);
+  const lineRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    if (!groupedRef.current || !lineRef.current) return;
+
+    const chartColor = "#F3F1EC";
+    const gridColor = "rgba(243, 241, 236, 0.12)";
+    const scaleOptions = {
+      ticks: { color: chartColor },
+      grid: { color: gridColor },
+    };
+    const grouped = new Chart(groupedRef.current, {
+      type: "bar",
+      data: {
+        labels: categories.map((row) => row.label),
+        datasets: [
+          {
+            label: "รถปัจจุบัน",
+            data: categories.map((row) => row.current),
+            backgroundColor: "#8B8E8A",
+          },
+          {
+            label: "รถใหม่",
+            data: categories.map((row) => row.next),
+            backgroundColor: "#B59B69",
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { labels: { color: chartColor } } },
+        scales: { x: scaleOptions, y: scaleOptions },
+      },
+    });
+    const line = new Chart(lineRef.current, {
+      type: "line",
+      data: {
+        labels: currentCumulative.map((_, index) =>
+          index === 0 ? "วันแรก" : "เดือน " + index,
+        ),
+        datasets: [
+          {
+            label: "เก็บรถปัจจุบัน",
+            data: currentCumulative,
+            borderColor: "#8B8E8A",
+            pointRadius: 0,
+          },
+          {
+            label: "เปลี่ยนรถ",
+            data: nextCumulative,
+            borderColor: "#B59B69",
+            pointRadius: 0,
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        plugins: { legend: { labels: { color: chartColor } } },
+        scales: { x: scaleOptions, y: scaleOptions },
+      },
+    });
+
+    return () => {
+      grouped.destroy();
+      line.destroy();
+    };
+  }, [result]);
+
+  return (
+    <div className="charts">
+      <figure>
+        <figcaption>เปรียบเทียบหมวดต้นทุน</figcaption>
+        <canvas ref={groupedRef} role="img" aria-label="กราฟเปรียบเทียบหมวดต้นทุน" />
+        <table className="chart-data">
+          <thead><tr><th>หมวด</th><th>รถปัจจุบัน</th><th>รถใหม่</th></tr></thead>
+          <tbody>
+            {categories.map((row) => (
+              <tr key={row.label}>
+                <th scope="row">{row.label}</th>
+                <td>{baht.format(row.current)}</td>
+                <td>{baht.format(row.next)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </figure>
+      <figure>
+        <figcaption>กระแสเงินสดสะสมและจุดคุ้มทุน</figcaption>
+        <canvas ref={lineRef} role="img" aria-label="กราฟกระแสเงินสดสะสม" />
+        <details>
+          <summary>ดูข้อมูลกระแสเงินสดทุกเดือน</summary>
+          <table className="chart-data">
+            <thead><tr><th>เดือน</th><th>เก็บรถปัจจุบัน</th><th>เปลี่ยนรถ</th></tr></thead>
+            <tbody>
+              {currentCumulative.map((value, index) => (
+                <tr key={index}>
+                  <th scope="row">{index === 0 ? "วันแรก" : index}</th>
+                  <td>{baht.format(value)}</td>
+                  <td>{baht.format(nextCumulative[index])}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </details>
+      </figure>
+    </div>
+  );
+}
+
 export default function Results({
   result,
   holdingYears,
@@ -181,6 +360,8 @@ export default function Results({
           </Status>
         </ul>
       </div>
+
+      <ComparisonCharts result={result} />
 
       <div className="result-tables">
         <ScenarioTable title={"ต้นทุนรถปัจจุบันใน " + holdingYears + " ปี"} scenario={result.current} />
