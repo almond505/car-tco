@@ -211,27 +211,29 @@ function ScenarioTable({
   ] as const;
 
   return (
-    <table>
-      <caption>{title}</caption>
-      <thead>
-        <tr>
-          <th scope="col">หมวดต้นทุน</th>
-          <th scope="col">จำนวนเงิน</th>
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map(([label, value]) => (
-          <tr key={label}>
-            <th scope="row">{label}</th>
-            <td>{baht.format(value)}</td>
+    <div className="table-scroll" tabIndex={0} role="region" aria-label={"เลื่อนตาราง " + title}>
+      <table>
+        <caption>{title}</caption>
+        <thead>
+          <tr>
+            <th scope="col">หมวดต้นทุน</th>
+            <th scope="col">จำนวนเงิน</th>
           </tr>
-        ))}
-        <tr>
-          <th scope="row">TCO สุทธิ</th>
-          <td>{baht.format(scenario.tco)}</td>
-        </tr>
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {rows.map(([label, value]) => (
+            <tr key={label}>
+              <th scope="row">{label}</th>
+              <td>{baht.format(value)}</td>
+            </tr>
+          ))}
+          <tr>
+            <th scope="row">TCO สุทธิ</th>
+            <td>{baht.format(scenario.tco)}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -265,8 +267,26 @@ function categoryRows(result: ComparisonResult) {
   }));
 }
 
+function waterfallRows(result: ComparisonResult): Array<[string, number]> {
+  return [
+    ["มูลค่ารถ", result.next.breakdown.acquisition],
+    ["ดอกเบี้ย", result.next.breakdown.financeInterest],
+    ["ค่าธรรมเนียม", result.next.breakdown.fees],
+    [
+      "ค่าใช้งาน",
+      result.next.breakdown.energy +
+        result.next.breakdown.fixed +
+        result.next.breakdown.periodic +
+        result.next.breakdown.lifestyle +
+        result.next.breakdown.custom,
+    ],
+    ["มูลค่าปลายงวด", result.next.breakdown.resaleCredit],
+  ];
+}
+
 function ComparisonCharts({ result }: { result: ComparisonResult }) {
   const categories = categoryRows(result);
+  const waterfallSteps = waterfallRows(result);
   const currentCumulative = cumulative(
     result.current.operating.oneTime,
     result.current.monthlyCashFlow,
@@ -276,10 +296,11 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
     result.next.monthlyCashFlow,
   );
   const groupedRef = useRef<HTMLCanvasElement>(null);
+  const waterfallRef = useRef<HTMLCanvasElement>(null);
   const lineRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
-    if (!groupedRef.current || !lineRef.current) return;
+    if (!groupedRef.current || !waterfallRef.current || !lineRef.current) return;
 
     const chartColor = "#F3F1EC";
     const gridColor = "rgba(243, 241, 236, 0.12)";
@@ -320,6 +341,45 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
         scales: { x: scaleOptions, y: scaleOptions },
       },
     });
+    let running = 0;
+    const floatingBars: Array<[number, number]> = waterfallSteps.map(([, value]) => {
+      const start = running;
+      running += value;
+      return [start, running];
+    });
+    const waterfall = new Chart<"bar", [number, number][], string>(
+      waterfallRef.current,
+      {
+        type: "bar",
+        data: {
+          labels: waterfallSteps.map(([label]) => label),
+          datasets: [
+            {
+              label: "TCO รถใหม่",
+              data: floatingBars,
+              backgroundColor: waterfallSteps.map(([, value]) =>
+                value < 0 ? "#82B99A" : "#B59B69",
+              ),
+            },
+          ],
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          plugins: {
+            legend: { labels: { color: chartColor } },
+            tooltip: {
+              callbacks: {
+                label: (context) =>
+                  context.label + ": " + baht.format(waterfallSteps[context.dataIndex]?.[1] ?? 0),
+              },
+            },
+          },
+          scales: { x: scaleOptions, y: scaleOptions },
+        },
+      },
+    );
     const line = new Chart(lineRef.current, {
       type: "line",
       data: {
@@ -359,6 +419,7 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
 
     return () => {
       grouped.destroy();
+      waterfall.destroy();
       line.destroy();
     };
   }, [result]);
@@ -368,36 +429,54 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
       <figure>
         <figcaption>เปรียบเทียบหมวดต้นทุน</figcaption>
         <canvas ref={groupedRef} role="img" aria-label="กราฟเปรียบเทียบหมวดต้นทุน" />
-        <table className="chart-data">
-          <thead><tr><th>หมวด</th><th>รถปัจจุบัน</th><th>รถใหม่</th></tr></thead>
-          <tbody>
-            {categories.map((row) => (
-              <tr key={row.label}>
-                <th scope="row">{row.label}</th>
-                <td>{baht.format(row.current)}</td>
-                <td>{baht.format(row.next)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="เลื่อนตารางเปรียบเทียบหมวดต้นทุน">
+          <table className="chart-data">
+            <thead><tr><th>หมวด</th><th>รถปัจจุบัน</th><th>รถใหม่</th></tr></thead>
+            <tbody>
+              {categories.map((row) => (
+                <tr key={row.label}>
+                  <th scope="row">{row.label}</th>
+                  <td>{baht.format(row.current)}</td>
+                  <td>{baht.format(row.next)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </figure>
+      <figure>
+        <figcaption>องค์ประกอบ TCO รถใหม่</figcaption>
+        <canvas ref={waterfallRef} role="img" aria-label="กราฟองค์ประกอบ TCO รถใหม่" />
+        <div className="table-scroll" tabIndex={0} role="region" aria-label="เลื่อนตารางองค์ประกอบ TCO รถใหม่">
+          <table className="chart-data">
+            <thead><tr><th>องค์ประกอบ</th><th>จำนวนเงิน</th></tr></thead>
+            <tbody>
+              {waterfallSteps.map(([label, value]) => (
+                <tr key={label}><th scope="row">{label}</th><td>{baht.format(value)}</td></tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </figure>
       <figure>
         <figcaption>กระแสเงินสดสะสมและจุดคุ้มทุน</figcaption>
         <canvas ref={lineRef} role="img" aria-label="กราฟกระแสเงินสดสะสม" />
         <details>
           <summary>ดูข้อมูลกระแสเงินสดทุกเดือน</summary>
-          <table className="chart-data">
-            <thead><tr><th>เดือน</th><th>เก็บรถปัจจุบัน</th><th>เปลี่ยนรถ</th></tr></thead>
-            <tbody>
-              {currentCumulative.map((value, index) => (
-                <tr key={index}>
-                  <th scope="row">{index === 0 ? "วันแรก" : index}</th>
-                  <td>{baht.format(value)}</td>
-                  <td>{baht.format(nextCumulative[index])}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="table-scroll" tabIndex={0} role="region" aria-label="เลื่อนตารางกระแสเงินสดสะสม">
+            <table className="chart-data">
+              <thead><tr><th>เดือน</th><th>เก็บรถปัจจุบัน</th><th>เปลี่ยนรถ</th></tr></thead>
+              <tbody>
+                {currentCumulative.map((value, index) => (
+                  <tr key={index}>
+                    <th scope="row">{index === 0 ? "วันแรก" : index}</th>
+                    <td>{baht.format(value)}</td>
+                    <td>{baht.format(nextCumulative[index])}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </details>
       </figure>
     </div>

@@ -481,6 +481,12 @@ export function validateInputs(inputs: CalculatorInputs): FieldErrors {
   currentNumbers.forEach(([path, value]) =>
     requireNonNegative(errors, path, value),
   );
+  if (
+    !Number.isFinite(inputs.current.marketValue) ||
+    inputs.current.marketValue <= 0
+  ) {
+    errors["current.marketValue"] = "กรุณาระบุมูลค่าขายปัจจุบัน";
+  }
 
   const hasCurrentFinance =
     inputs.current.outstandingPayoff > 0 ||

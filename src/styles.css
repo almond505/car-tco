@@ -41,7 +41,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 #calculator { padding: 128px 0 160px; scroll-margin-top: 90px; }
 #calculator > h2, .results h2 { max-width: 900px; font-size: clamp(2.3rem, 5vw, 4.8rem); line-height: 1; }
 .calculator-workspace { display: grid; grid-template-columns: minmax(0, 7fr) minmax(280px, 5fr); gap: 20px; align-items: start; margin-top: 56px; }
-.guided-studio, .live-summary, .verdict, .result-main, .affordability, .switch-summary, .charts figure, .result-tables table { border: 1px solid var(--line); background: var(--surface); border-radius: 18px; }
+.guided-studio, .live-summary, .verdict, .result-main, .affordability, .switch-summary, .charts figure, .result-tables .table-scroll { border: 1px solid var(--line); background: var(--surface); border-radius: 18px; }
 .guided-studio { padding: 20px; }
 .live-summary { position: sticky; top: 92px; padding: 28px; }
 .live-summary strong { display: block; margin: 8px 0 0; font-family: "Geist", sans-serif; font-size: clamp(2.4rem, 5vw, 5.5rem); letter-spacing: -0.06em; }
@@ -88,6 +88,8 @@ legend { grid-column: 1 / -1; margin-bottom: 12px; font-size: 1.35rem; font-weig
 .charts figure:last-child { grid-column: 1 / -1; }
 .charts canvas { width: 100% !important; height: 320px !important; }
 .result-tables { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; margin-top: 24px; }
+.table-scroll { overflow-x: auto; }
+.table-scroll:focus-visible { outline: 2px solid #f3f1ec; outline-offset: 3px; }
 table { width: 100%; border-collapse: collapse; }
 caption { padding: 20px; text-align: left; font-size: 1.2rem; font-weight: 700; }
 th, td { padding: 11px 16px; border-top: 1px solid var(--line); text-align: left; }
@@ -114,6 +116,7 @@ footer a { color: #f3f1ec; }
   .step-tabs { grid-template-columns: repeat(2, 1fr); }
   fieldset, .operating-grid { grid-template-columns: 1fr; }
   .custom-cost-row { grid-template-columns: 1fr; }
+  .table-scroll table { min-width: 32rem; }
   footer { display: grid; }
 }
 @media (prefers-reduced-motion: reduce) {

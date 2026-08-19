@@ -10,6 +10,7 @@ import {
 function validInputs() {
   const inputs = createDefaultInputs();
   inputs.global.grossIncomeMonthly = 50_000;
+  inputs.current.marketValue = 300_000;
   inputs.current.operating.efficiencyKmPerUnit = 15;
   inputs.next.cashPrice = 600_000;
   inputs.next.operating.efficiencyKmPerUnit = 6;

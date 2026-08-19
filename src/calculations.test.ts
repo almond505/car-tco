@@ -200,6 +200,17 @@ describe("validateInputs", () => {
     });
   });
 
+  it("requires a positive current market value while allowing a zero end value", () => {
+    const input = comparisonInputs();
+    input.current.marketValue = 0;
+    input.current.endValue = 0;
+
+    expect(validateInputs(input)).toMatchObject({
+      "current.marketValue": "กรุณาระบุมูลค่าขายปัจจุบัน",
+    });
+    expect(validateInputs(input)["current.endValue"]).toBeUndefined();
+  });
+
   it("rejects a holding period shorter than either finance period", () => {
     const input = comparisonInputs();
     input.global.holdingYears = 1;
