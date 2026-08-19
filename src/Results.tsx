@@ -205,10 +205,18 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
         ],
       },
       options: {
+        indexAxis: "y",
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { legend: { labels: { color: chartColor } } },
+        plugins: {
+          legend: { labels: { color: chartColor } },
+          tooltip: {
+            callbacks: {
+              label: (context) => context.dataset.label + ": " + baht.format(context.parsed.x ?? 0),
+            },
+          },
+        },
         scales: { x: scaleOptions, y: scaleOptions },
       },
     });
@@ -237,7 +245,14 @@ function ComparisonCharts({ result }: { result: ComparisonResult }) {
         responsive: true,
         maintainAspectRatio: false,
         animation: false,
-        plugins: { legend: { labels: { color: chartColor } } },
+        plugins: {
+          legend: { labels: { color: chartColor } },
+          tooltip: {
+            callbacks: {
+              label: (context) => context.dataset.label + ": " + baht.format(context.parsed.y ?? 0),
+            },
+          },
+        },
         scales: { x: scaleOptions, y: scaleOptions },
       },
     });
