@@ -1,0 +1,23 @@
+:root {
+  color: #f3f1ec;
+  background: #08090a;
+  font-family: "Noto Sans Thai", sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+}
+
+a {
+  color: inherit;
+}
