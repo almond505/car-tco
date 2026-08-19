@@ -217,3 +217,168 @@ export function calculateOperatingCosts(
     totalForHorizon: recurringMonthly * holdingMonths + oneTime,
   };
 }
+
+function buildBreakdown(
+  acquisition: number,
+  financeInterest: number,
+  fees: number,
+  endValue: number,
+  operating: OperatingSummary,
+  holdingMonths: number,
+): CostBreakdown {
+  return {
+    acquisition,
+    financeInterest,
+    fees,
+    energy: operating.energyMonthly * holdingMonths,
+    fixed: operating.fixedMonthly * holdingMonths,
+    periodic: operating.periodicMonthly * holdingMonths,
+    lifestyle: operating.lifestyleMonthly * holdingMonths,
+    custom:
+      operating.customRecurringMonthly * holdingMonths + operating.oneTime,
+    resaleCredit: -endValue,
+  };
+}
+
+function totalBreakdown(breakdown: CostBreakdown): number {
+  return Object.values(breakdown).reduce((sum, value) => sum + value, 0);
+}
+
+export function calculateCurrentScenario(
+  inputs: CalculatorInputs,
+): ScenarioResult {
+  const holdingMonths = inputs.global.holdingYears * 12;
+  const operating = calculateOperatingCosts(
+    inputs.current.operating,
+    inputs.global,
+  );
+  const remainingInterest = Math.max(
+    0,
+    inputs.current.monthlyInstallment * inputs.current.monthsRemaining -
+      inputs.current.outstandingPayoff,
+  );
+  const breakdown = buildBreakdown(
+    inputs.current.marketValue,
+    remainingInterest,
+    0,
+    inputs.current.endValue,
+    operating,
+    holdingMonths,
+  );
+  const tco = totalBreakdown(breakdown);
+  const monthlyCashFlow = Array.from(
+    { length: holdingMonths },
+    (_, month) =>
+      operating.recurringMonthly +
+      (month < inputs.current.monthsRemaining
+        ? inputs.current.monthlyInstallment
+        : 0),
+  );
+
+  return {
+    tco,
+    averageMonthlyTco: tco / holdingMonths,
+    monthlyCashBurden:
+      operating.recurringMonthly + inputs.current.monthlyInstallment,
+    installment: inputs.current.monthlyInstallment,
+    downPayment: 0,
+    totalFinanceInterest: remainingInterest,
+    endValue: inputs.current.endValue,
+    operating,
+    breakdown,
+    monthlyCashFlow,
+  };
+}
+
+export function calculateNewScenario(
+  inputs: CalculatorInputs,
+): ScenarioResult {
+  const holdingMonths = inputs.global.holdingYears * 12;
+  const loan = calculateFlatLoan(inputs.next);
+  const operating = calculateOperatingCosts(inputs.next.operating, inputs.global);
+  const breakdown = buildBreakdown(
+    loan.netPrice,
+    loan.totalInterest,
+    inputs.next.purchaseFees,
+    inputs.next.endValue,
+    operating,
+    holdingMonths,
+  );
+  const tco = totalBreakdown(breakdown);
+  const monthlyCashFlow = Array.from(
+    { length: holdingMonths },
+    (_, month) =>
+      operating.recurringMonthly +
+      (month < inputs.next.financeMonths ? loan.installment : 0),
+  );
+
+  return {
+    tco,
+    averageMonthlyTco: tco / holdingMonths,
+    monthlyCashBurden: operating.recurringMonthly + loan.installment,
+    installment: loan.installment,
+    downPayment: loan.downPayment,
+    totalFinanceInterest: loan.totalInterest,
+    endValue: inputs.next.endValue,
+    operating,
+    breakdown,
+    monthlyCashFlow,
+  };
+}
+
+function findBreakEvenMonth(
+  switchDayCash: number,
+  current: ScenarioResult,
+  next: ScenarioResult,
+): number | null {
+  let keepCumulative = current.operating.oneTime;
+  let switchCumulative = switchDayCash;
+  if (switchCumulative <= keepCumulative) return 0;
+
+  for (let month = 0; month < current.monthlyCashFlow.length; month += 1) {
+    keepCumulative += current.monthlyCashFlow[month];
+    switchCumulative += next.monthlyCashFlow[month];
+    if (switchCumulative <= keepCumulative) return month + 1;
+  }
+  return null;
+}
+
+export function calculateComparison(
+  inputs: CalculatorInputs,
+): ComparisonResult {
+  const current = calculateCurrentScenario(inputs);
+  const next = calculateNewScenario(inputs);
+  const loan = calculateFlatLoan(inputs.next);
+  const difference = next.tco - current.tco;
+  const incomeSharePercent =
+    (next.monthlyCashBurden / inputs.global.grossIncomeMonthly) * 100;
+  const switchDayCash =
+    loan.downPayment +
+    inputs.next.purchaseFees +
+    next.operating.oneTime +
+    inputs.current.outstandingPayoff +
+    inputs.current.earlySettlementFee -
+    inputs.current.marketValue;
+
+  return {
+    current,
+    next,
+    difference,
+    winner:
+      Math.abs(difference) < 0.01
+        ? "equal"
+        : difference < 0
+          ? "new"
+          : "current",
+    switchDayCash,
+    breakEvenMonth: findBreakEvenMonth(switchDayCash, current, next),
+    affordability: {
+      downPaymentPass: loan.downPayment >= loan.netPrice * 0.2,
+      termPass: loan.principal === 0 || inputs.next.financeMonths <= 48,
+      originalIncomePass: incomeSharePercent <= 10,
+      customIncomePass:
+        incomeSharePercent <= inputs.global.incomeCeilingPercent,
+      incomeSharePercent,
+    },
+  };
+}
