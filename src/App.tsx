@@ -8,6 +8,7 @@ import {
   type OperatingCosts,
 } from "./calculations";
 import GuidedCalculator from "./GuidedCalculator";
+import Results from "./Results";
 
 export const STORAGE_KEY = "car-tco-th:v1";
 
@@ -209,6 +210,7 @@ export default function App() {
           ล้างข้อมูล
         </button>
       </section>
+      <Results result={result} />
     </main>
   );
 }
