@@ -382,3 +382,157 @@ export function calculateComparison(
     },
   };
 }
+
+function requireNonNegative(
+  errors: FieldErrors,
+  path: string,
+  value: number,
+): void {
+  if (!Number.isFinite(value) || value < 0) {
+    errors[path] = "ค่าต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป";
+  }
+}
+
+function validateOperating(
+  errors: FieldErrors,
+  prefix: string,
+  operating: OperatingCosts,
+): void {
+  if (
+    !Number.isFinite(operating.efficiencyKmPerUnit) ||
+    operating.efficiencyKmPerUnit <= 0
+  ) {
+    errors[prefix + ".efficiencyKmPerUnit"] = "ค่าประสิทธิภาพต้องมากกว่า 0";
+  }
+  requireNonNegative(errors, prefix + ".unitPrice", operating.unitPrice);
+
+  const nonNegativeFields: Array<keyof OperatingCosts> = [
+    "insuranceAnnual",
+    "compulsoryInsuranceAnnual",
+    "taxAnnual",
+    "inspectionAnnual",
+    "maintenanceAnnual",
+    "repairsAnnual",
+    "tiresAmount",
+    "tiresIntervalMonths",
+    "batteryAmount",
+    "batteryIntervalMonths",
+    "parkingMonthly",
+    "tollsMonthly",
+    "cleaningMonthly",
+  ];
+  for (const field of nonNegativeFields) {
+    requireNonNegative(errors, prefix + "." + field, Number(operating[field]));
+  }
+
+  if (operating.tiresAmount > 0 && operating.tiresIntervalMonths <= 0) {
+    errors[prefix + ".tiresIntervalMonths"] =
+      "กรุณาระบุรอบเปลี่ยนเป็นเดือน";
+  }
+  if (operating.batteryAmount > 0 && operating.batteryIntervalMonths <= 0) {
+    errors[prefix + ".batteryIntervalMonths"] =
+      "กรุณาระบุรอบเปลี่ยนเป็นเดือน";
+  }
+  operating.custom.forEach((cost, index) => {
+    requireNonNegative(errors, prefix + ".custom." + index, cost.amount);
+    if (cost.amount > 0 && cost.name.trim() === "") {
+      errors[prefix + ".custom." + index] = "กรุณาระบุชื่อค่าใช้จ่าย";
+    }
+  });
+}
+
+export function validateInputs(inputs: CalculatorInputs): FieldErrors {
+  const errors: FieldErrors = {};
+  const holdingMonths = inputs.global.holdingYears * 12;
+
+  if (
+    !Number.isFinite(inputs.global.grossIncomeMonthly) ||
+    inputs.global.grossIncomeMonthly <= 0
+  ) {
+    errors["global.grossIncomeMonthly"] = "กรุณาระบุรายได้รวมต่อเดือน";
+  }
+  if (
+    !Number.isFinite(inputs.global.holdingYears) ||
+    inputs.global.holdingYears < 1 ||
+    inputs.global.holdingYears > 20
+  ) {
+    errors["global.holdingYears"] = "ระยะเวลาถือครองต้องอยู่ระหว่าง 1–20 ปี";
+  }
+  if (
+    inputs.global.incomeCeilingPercent < 10 ||
+    inputs.global.incomeCeilingPercent > 40
+  ) {
+    errors["global.incomeCeilingPercent"] = "เลือกเพดานระหว่าง 10–40%";
+  }
+  requireNonNegative(
+    errors,
+    "global.distanceMonthlyKm",
+    inputs.global.distanceMonthlyKm,
+  );
+
+  const currentNumbers: Array<[string, number]> = [
+    ["current.marketValue", inputs.current.marketValue],
+    ["current.endValue", inputs.current.endValue],
+    ["current.outstandingPayoff", inputs.current.outstandingPayoff],
+    ["current.monthlyInstallment", inputs.current.monthlyInstallment],
+    ["current.monthsRemaining", inputs.current.monthsRemaining],
+    ["current.earlySettlementFee", inputs.current.earlySettlementFee],
+  ];
+  currentNumbers.forEach(([path, value]) =>
+    requireNonNegative(errors, path, value),
+  );
+
+  const hasCurrentFinance =
+    inputs.current.outstandingPayoff > 0 ||
+    inputs.current.monthlyInstallment > 0 ||
+    inputs.current.monthsRemaining > 0;
+  if (hasCurrentFinance && inputs.current.outstandingPayoff <= 0) {
+    errors["current.outstandingPayoff"] = "กรุณาระบุยอดปิดบัญชี";
+  }
+  if (hasCurrentFinance && inputs.current.monthlyInstallment <= 0) {
+    errors["current.monthlyInstallment"] = "กรุณาระบุค่างวดรถปัจจุบัน";
+  }
+  if (hasCurrentFinance && inputs.current.monthsRemaining <= 0) {
+    errors["current.monthsRemaining"] = "กรุณาระบุจำนวนงวดคงเหลือ";
+  }
+
+  const nextNumbers: Array<[string, number]> = [
+    ["next.cashPrice", inputs.next.cashPrice],
+    ["next.discount", inputs.next.discount],
+    ["next.purchaseFees", inputs.next.purchaseFees],
+    ["next.flatRatePercent", inputs.next.flatRatePercent],
+    ["next.financeMonths", inputs.next.financeMonths],
+    ["next.endValue", inputs.next.endValue],
+  ];
+  nextNumbers.forEach(([path, value]) =>
+    requireNonNegative(errors, path, value),
+  );
+  if (inputs.next.cashPrice <= 0) {
+    errors["next.cashPrice"] = "กรุณาระบุราคารถใหม่";
+  }
+  if (inputs.next.discount > inputs.next.cashPrice) {
+    errors["next.discount"] = "ส่วนลดต้องไม่เกินราคารถ";
+  }
+  if (
+    inputs.next.downPaymentPercent < 0 ||
+    inputs.next.downPaymentPercent > 100
+  ) {
+    errors["next.downPaymentPercent"] = "เงินดาวน์ต้องอยู่ระหว่าง 0–100%";
+  }
+  const loan = calculateFlatLoan(inputs.next);
+  if (loan.principal > 0 && inputs.next.financeMonths <= 0) {
+    errors["next.financeMonths"] = "กรุณาระบุจำนวนเดือนที่ผ่อน";
+  }
+
+  if (
+    (loan.principal > 0 && holdingMonths < inputs.next.financeMonths) ||
+    holdingMonths < inputs.current.monthsRemaining
+  ) {
+    errors["global.holdingYears"] =
+      "ระยะเวลาถือครองต้องครอบคลุมระยะเวลาผ่อนทั้งหมด";
+  }
+
+  validateOperating(errors, "current.operating", inputs.current.operating);
+  validateOperating(errors, "next.operating", inputs.next.operating);
+  return errors;
+}

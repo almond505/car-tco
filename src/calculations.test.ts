@@ -4,6 +4,7 @@ import {
   calculateFlatLoan,
   calculateOperatingCosts,
   createEmptyOperatingCosts,
+  validateInputs,
   type CalculatorInputs,
   type GlobalInputs,
   type NewCarInputs,
@@ -179,5 +180,59 @@ describe("calculateComparison", () => {
     expect(calculateComparison(cashPurchase).affordability.termPass).toBe(
       true,
     );
+  });
+});
+
+describe("validateInputs", () => {
+  it("accepts the complete comparison fixture", () => {
+    expect(validateInputs(comparisonInputs())).toEqual({});
+  });
+
+  it("requires positive income and both efficiencies", () => {
+    const input = comparisonInputs();
+    input.global.grossIncomeMonthly = 0;
+    input.current.operating.efficiencyKmPerUnit = 0;
+    input.next.operating.efficiencyKmPerUnit = 0;
+    expect(validateInputs(input)).toMatchObject({
+      "global.grossIncomeMonthly": "กรุณาระบุรายได้รวมต่อเดือน",
+      "current.operating.efficiencyKmPerUnit": "ค่าประสิทธิภาพต้องมากกว่า 0",
+      "next.operating.efficiencyKmPerUnit": "ค่าประสิทธิภาพต้องมากกว่า 0",
+    });
+  });
+
+  it("rejects a holding period shorter than either finance period", () => {
+    const input = comparisonInputs();
+    input.global.holdingYears = 1;
+    input.next.financeMonths = 48;
+    input.current.monthsRemaining = 24;
+    expect(validateInputs(input)).toMatchObject({
+      "global.holdingYears": "ระยะเวลาถือครองต้องครอบคลุมระยะเวลาผ่อนทั้งหมด",
+    });
+
+    const cashPurchase = comparisonInputs();
+    cashPurchase.global.holdingYears = 1;
+    cashPurchase.current.outstandingPayoff = 0;
+    cashPurchase.current.monthlyInstallment = 0;
+    cashPurchase.current.monthsRemaining = 0;
+    cashPurchase.next.downPaymentPercent = 100;
+    cashPurchase.next.financeMonths = 84;
+    expect(validateInputs(cashPurchase)["global.holdingYears"]).toBeUndefined();
+  });
+
+  it("requires the current finance group to be complete", () => {
+    const input = comparisonInputs();
+    input.current.monthlyInstallment = 0;
+    expect(validateInputs(input)).toMatchObject({
+      "current.monthlyInstallment": "กรุณาระบุค่างวดรถปัจจุบัน",
+    });
+  });
+
+  it("requires a replacement interval when a periodic amount exists", () => {
+    const input = comparisonInputs();
+    input.next.operating.tiresAmount = 20_000;
+    input.next.operating.tiresIntervalMonths = 0;
+    expect(validateInputs(input)).toMatchObject({
+      "next.operating.tiresIntervalMonths": "กรุณาระบุรอบเปลี่ยนเป็นเดือน",
+    });
   });
 });
