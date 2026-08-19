@@ -4,11 +4,13 @@ import {
   createEmptyOperatingCosts,
   validateInputs,
   type CalculatorInputs,
+  type CustomCost,
+  type OperatingCosts,
 } from "./calculations";
 
-const STORAGE_KEY = "car-tco-th:v1";
+export const STORAGE_KEY = "car-tco-th:v1";
 
-function createDefaultInputs(): CalculatorInputs {
+export function createDefaultInputs(): CalculatorInputs {
   return {
     global: {
       grossIncomeMonthly: 0,
@@ -44,7 +46,89 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-function loadInputs(): CalculatorInputs {
+function isFiniteNumber(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value);
+}
+
+function hasNumbers(value: Record<string, unknown>, fields: string[]): boolean {
+  return fields.every((field) => isFiniteNumber(value[field]));
+}
+
+function isCustomCost(value: unknown): value is CustomCost {
+  return (
+    isRecord(value) &&
+    typeof value.id === "string" &&
+    typeof value.name === "string" &&
+    isFiniteNumber(value.amount) &&
+    (value.frequency === "once" ||
+      value.frequency === "monthly" ||
+      value.frequency === "annual")
+  );
+}
+
+function isOperatingCosts(value: unknown): value is OperatingCosts {
+  return (
+    isRecord(value) &&
+    (value.energyType === "fuel" || value.energyType === "electric") &&
+    hasNumbers(value, [
+      "efficiencyKmPerUnit",
+      "unitPrice",
+      "insuranceAnnual",
+      "compulsoryInsuranceAnnual",
+      "taxAnnual",
+      "inspectionAnnual",
+      "maintenanceAnnual",
+      "repairsAnnual",
+      "tiresAmount",
+      "tiresIntervalMonths",
+      "batteryAmount",
+      "batteryIntervalMonths",
+      "parkingMonthly",
+      "tollsMonthly",
+      "cleaningMonthly",
+    ]) &&
+    Array.isArray(value.custom) &&
+    value.custom.every(isCustomCost)
+  );
+}
+
+function isCalculatorInputs(value: unknown): value is CalculatorInputs {
+  if (!isRecord(value) || !isRecord(value.global) || !isRecord(value.current) || !isRecord(value.next)) {
+    return false;
+  }
+
+  return (
+    hasNumbers(value.global, [
+      "grossIncomeMonthly",
+      "incomeCeilingPercent",
+      "holdingYears",
+      "distanceMonthlyKm",
+    ]) &&
+    typeof value.current.name === "string" &&
+    hasNumbers(value.current, [
+      "marketValue",
+      "endValue",
+      "outstandingPayoff",
+      "monthlyInstallment",
+      "monthsRemaining",
+      "earlySettlementFee",
+    ]) &&
+    isOperatingCosts(value.current.operating) &&
+    typeof value.next.name === "string" &&
+    hasNumbers(value.next, [
+      "cashPrice",
+      "discount",
+      "purchaseFees",
+      "downPaymentPercent",
+      "flatRatePercent",
+      "financeMonths",
+      "endValue",
+    ]) &&
+    isOperatingCosts(value.next.operating)
+  );
+}
+
+export function loadInputs(): CalculatorInputs {
   const fallback = createDefaultInputs();
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -53,21 +137,18 @@ function loadInputs(): CalculatorInputs {
     if (!isRecord(stored) || stored.version !== 1 || !isRecord(stored.inputs)) {
       return fallback;
     }
-    const candidate = stored.inputs as unknown as CalculatorInputs;
-    if (
-      !isRecord(candidate.global) ||
-      !isRecord(candidate.current) ||
-      !isRecord(candidate.next) ||
-      !isRecord(candidate.current.operating) ||
-      !isRecord(candidate.next.operating) ||
-      !Array.isArray(candidate.current.operating.custom) ||
-      !Array.isArray(candidate.next.operating.custom)
-    ) {
-      return fallback;
-    }
-    return candidate;
+    return isCalculatorInputs(stored.inputs) ? stored.inputs : fallback;
   } catch {
     return fallback;
+  }
+}
+
+export function saveInputs(inputs: CalculatorInputs): void {
+  if (Object.keys(validateInputs(inputs)).length > 0) return;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, inputs }));
+  } catch {
+    // Storage can be unavailable or full; the in-memory calculator still works.
   }
 }
 
@@ -82,11 +163,7 @@ export default function App() {
   );
 
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, inputs }));
-    } catch {
-      // Storage can be unavailable or full; the in-memory calculator still works.
-    }
+    saveInputs(inputs);
   }, [inputs]);
 
   return (

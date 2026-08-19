@@ -386,9 +386,9 @@ export function calculateComparison(
 function requireNonNegative(
   errors: FieldErrors,
   path: string,
-  value: number,
+  value: unknown,
 ): void {
-  if (!Number.isFinite(value) || value < 0) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     errors[path] = "ค่าต้องเป็นตัวเลขตั้งแต่ 0 ขึ้นไป";
   }
 }
@@ -422,7 +422,7 @@ function validateOperating(
     "cleaningMonthly",
   ];
   for (const field of nonNegativeFields) {
-    requireNonNegative(errors, prefix + "." + field, Number(operating[field]));
+    requireNonNegative(errors, prefix + "." + field, operating[field]);
   }
 
   if (operating.tiresAmount > 0 && operating.tiresIntervalMonths <= 0) {
