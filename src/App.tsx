@@ -1,4 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useGSAP } from "@gsap/react";
+import gsap from "gsap";
+import { ScrollTrigger } from "gsap/ScrollTrigger";
 import {
   calculateComparison,
   createEmptyOperatingCosts,
@@ -8,7 +11,9 @@ import {
   type OperatingCosts,
 } from "./calculations";
 import GuidedCalculator from "./GuidedCalculator";
-import Results from "./Results";
+import Results, { LiveSummary } from "./Results";
+
+gsap.registerPlugin(useGSAP, ScrollTrigger);
 
 export const STORAGE_KEY = "car-tco-th:v1";
 
@@ -165,6 +170,7 @@ export function clearSavedInputs(): void {
 export default function App() {
   const [inputs, setInputs] = useState<CalculatorInputs>(loadInputs);
   const [activeStep, setActiveStep] = useState(0);
+  const root = useRef<HTMLElement>(null);
   const errors = useMemo(() => validateInputs(inputs), [inputs]);
   const result = useMemo(
     () =>
@@ -176,37 +182,89 @@ export default function App() {
     saveInputs(inputs);
   }, [inputs]);
 
+  useGSAP(
+    () => {
+      const media = gsap.matchMedia();
+      media.add(
+        "(min-width: 1024px) and (prefers-reduced-motion: no-preference)",
+        () => {
+          gsap.from(".hero-copy > *", {
+            y: 24,
+            opacity: 0,
+            duration: 0.7,
+            stagger: 0.08,
+            ease: "power3.out",
+          });
+          ScrollTrigger.create({
+            trigger: ".results",
+            start: "top 96px",
+            end: "bottom bottom",
+            pin: ".verdict",
+            pinSpacing: false,
+          });
+          gsap.fromTo(
+            ".verdict p",
+            { opacity: 0.18 },
+            {
+              opacity: 1,
+              scrollTrigger: {
+                trigger: ".results",
+                start: "top 70%",
+                end: "top 25%",
+                scrub: true,
+              },
+            },
+          );
+        },
+      );
+      return () => media.revert();
+    },
+    { scope: root },
+  );
+
+  const handleReset = () => {
+    clearSavedInputs();
+    setInputs(createDefaultInputs());
+  };
+
   return (
-    <main>
-      <nav aria-label="เมนูหลัก">
-        <a href="#calculator">ต้นทุนรถของคุณ</a>
-      </nav>
-      <header>
-        <h1>รถคันต่อไป ควรคุ้มตั้งแต่วันแรก</h1>
-        <p>เปรียบเทียบต้นทุนจริง ภาระรายเดือน และจุดคุ้มทุนจากข้อมูลของคุณ</p>
+    <main ref={root} className="app-shell">
+      <nav className="floating-nav" aria-label="เมนูหลัก">
+        <a href="#top">ต้นทุนรถของคุณ</a>
         <a href="#calculator">เริ่มคำนวณ</a>
+      </nav>
+      <header id="top" className="hero">
+        <div className="hero-copy">
+          <p>ตัดสินใจจากต้นทุนจริง</p>
+          <h1>
+            รถคันต่อไป
+            <span className="hero-inline-image" role="img" aria-label="รายละเอียดตัวถังรถ" />
+            <br className="hero-mobile-break" />
+            ควรคุ้มตั้งแต่วันแรก
+          </h1>
+          <p>เปรียบเทียบต้นทุนจริง ภาระรายเดือน และจุดคุ้มทุนจากข้อมูลของคุณ</p>
+          <a className="primary-action" href="#calculator">เริ่มคำนวณ</a>
+        </div>
+        <div className="cost-marquee" aria-label="หมวดต้นทุนที่รองรับ">
+          <div>
+            <span>ค่างวด · พลังงาน · ประกัน · ภาษี · บำรุงรักษา · ราคาขายต่อ · </span>
+            <span aria-hidden="true">ค่างวด · พลังงาน · ประกัน · ภาษี · บำรุงรักษา · ราคาขายต่อ · </span>
+          </div>
+        </div>
       </header>
       <section id="calculator" aria-labelledby="calculator-title">
-        <h2 id="calculator-title">เริ่มจากข้อมูลของคุณ</h2>
-        <p>
-          {result
-            ? "ข้อมูลพร้อมสำหรับแสดงผลเปรียบเทียบ"
-            : "กรอกข้อมูลที่จำเป็นเพื่อเริ่มเปรียบเทียบ"}
-        </p>
-        <GuidedCalculator
-          inputs={inputs}
-          errors={errors}
-          activeStep={activeStep}
-          onStepChange={setActiveStep}
-          onChange={setInputs}
-        />
-        <button
-          type="button"
-          onClick={() => {
-            clearSavedInputs();
-            setInputs(createDefaultInputs());
-          }}
-        >
+        <h2 id="calculator-title">รู้ต้นทุนทุกบาท ก่อนเปลี่ยนรถ</h2>
+        <div className="calculator-workspace">
+          <GuidedCalculator
+            inputs={inputs}
+            errors={errors}
+            activeStep={activeStep}
+            onStepChange={setActiveStep}
+            onChange={setInputs}
+          />
+          <LiveSummary result={result} holdingYears={inputs.global.holdingYears} />
+        </div>
+        <button className="text-action" type="button" onClick={handleReset}>
           ล้างข้อมูล
         </button>
       </section>
@@ -215,6 +273,23 @@ export default function App() {
         holdingYears={inputs.global.holdingYears}
         incomeCeilingPercent={inputs.global.incomeCeilingPercent}
       />
+      <footer>
+        <div>
+          <p>ผลลัพธ์เป็นประมาณการจากข้อมูลที่กรอก ไม่ใช่การอนุมัติสินเชื่อหรือคำแนะนำทางการเงิน</p>
+          <details>
+            <summary>วิธีคำนวณและแหล่งอ้างอิง</summary>
+            <p>ดอกเบี้ย Flat Rate คิดจากเงินต้นเต็มจำนวนตลอดอายุสัญญา</p>
+            <a href="https://www.bot.or.th/th/satang-story/rights-responsibility/flat-effective.html">
+              ธนาคารแห่งประเทศไทย: ดอกเบี้ยแบบเงินต้นคงที่
+            </a>
+            <p>20/4/10 ใช้เงินดาวน์ 20% ระยะผ่อนไม่เกิน 4 ปี และค่าเดินทาง 10% ของรายได้รวม</p>
+            <a href="https://www.chase.com/personal/auto/education/buying/what-is-the-20-4-10-rule-for-car-buying">
+              ที่มาของแนวทาง 20/4/10
+            </a>
+          </details>
+        </div>
+        <a href="#top">กลับด้านบน</a>
+      </footer>
     </main>
   );
 }
