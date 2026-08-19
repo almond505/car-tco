@@ -7,6 +7,7 @@ import {
   type CustomCost,
   type OperatingCosts,
 } from "./calculations";
+import GuidedCalculator from "./GuidedCalculator";
 
 export const STORAGE_KEY = "car-tco-th:v1";
 
@@ -191,12 +192,13 @@ export default function App() {
             ? "ข้อมูลพร้อมสำหรับแสดงผลเปรียบเทียบ"
             : "กรอกข้อมูลที่จำเป็นเพื่อเริ่มเปรียบเทียบ"}
         </p>
-        <button
-          type="button"
-          onClick={() => setActiveStep((activeStep + 1) % 4)}
-        >
-          ขั้นตอน {activeStep + 1} จาก 4
-        </button>
+        <GuidedCalculator
+          inputs={inputs}
+          errors={errors}
+          activeStep={activeStep}
+          onStepChange={setActiveStep}
+          onChange={setInputs}
+        />
         <button
           type="button"
           onClick={() => {
