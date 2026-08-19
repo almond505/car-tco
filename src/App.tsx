@@ -210,7 +210,11 @@ export default function App() {
           ล้างข้อมูล
         </button>
       </section>
-      <Results result={result} />
+      <Results
+        result={result}
+        holdingYears={inputs.global.holdingYears}
+        incomeCeilingPercent={inputs.global.incomeCeilingPercent}
+      />
     </main>
   );
 }

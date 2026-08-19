@@ -20,7 +20,7 @@ function formatBreakEven(month: number | null): string {
   return years + " ปี " + months + " เดือน";
 }
 
-function verdict(result: ComparisonResult): string {
+function verdict(result: ComparisonResult, holdingYears: number): string {
   const amount = baht.format(Math.abs(result.difference));
   const periodResult =
     result.winner === "new"
@@ -31,7 +31,7 @@ function verdict(result: ComparisonResult): string {
   const affordability = result.affordability.customIncomePass
     ? "และภาระรายเดือนอยู่ในเพดานที่ตั้งไว้"
     : "แต่ภาระรายเดือนเกินเพดานที่ตั้งไว้";
-  return periodResult + " " + affordability;
+  return periodResult + " ใน " + holdingYears + " ปี " + affordability;
 }
 
 function Status({
@@ -112,8 +112,12 @@ function ScenarioTable({
 
 export default function Results({
   result,
+  holdingYears,
+  incomeCeilingPercent,
 }: {
   result: ComparisonResult | null;
+  holdingYears: number;
+  incomeCeilingPercent: number;
 }) {
   if (!result) {
     return (
@@ -129,7 +133,7 @@ export default function Results({
     <section className="results" aria-labelledby="results-title">
       <div className="verdict" aria-live="polite">
         <h2 id="results-title">คำตัดสินจากต้นทุน</h2>
-        <p>{verdict(result)}</p>
+        <p>{verdict(result, holdingYears)}</p>
       </div>
 
       <dl className="result-bento">
@@ -170,17 +174,17 @@ export default function Results({
           <Status pass={affordability.downPaymentPass}>ดาวน์อย่างน้อย 20%</Status>
           <Status pass={affordability.termPass}>ผ่อนไม่เกิน 48 เดือน</Status>
           <Status pass={affordability.originalIncomePass}>
-            ค่าเดินทางไม่เกิน 10% ของรายได้
+            ภาระค่าเดินทางรวมไม่เกิน 10% ของรายได้
           </Status>
           <Status pass={affordability.customIncomePass}>
-            ผ่านเพดานที่ผู้ใช้เลือก
+            เพดานส่วนตัว {incomeCeilingPercent}% ของรายได้
           </Status>
         </ul>
       </div>
 
       <div className="result-tables">
-        <ScenarioTable title="ต้นทุนรถปัจจุบัน" scenario={result.current} />
-        <ScenarioTable title="ต้นทุนรถใหม่" scenario={result.next} />
+        <ScenarioTable title={"ต้นทุนรถปัจจุบันใน " + holdingYears + " ปี"} scenario={result.current} />
+        <ScenarioTable title={"ต้นทุนรถใหม่ใน " + holdingYears + " ปี"} scenario={result.next} />
       </div>
     </section>
   );
