@@ -152,6 +152,14 @@ export function saveInputs(inputs: CalculatorInputs): void {
   }
 }
 
+export function clearSavedInputs(): void {
+  try {
+    localStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Storage can be unavailable; reset still clears the in-memory inputs.
+  }
+}
+
 export default function App() {
   const [inputs, setInputs] = useState<CalculatorInputs>(loadInputs);
   const [activeStep, setActiveStep] = useState(0);
@@ -189,7 +197,13 @@ export default function App() {
         >
           ขั้นตอน {activeStep + 1} จาก 4
         </button>
-        <button type="button" onClick={() => setInputs(createDefaultInputs())}>
+        <button
+          type="button"
+          onClick={() => {
+            clearSavedInputs();
+            setInputs(createDefaultInputs());
+          }}
+        >
           ล้างข้อมูล
         </button>
       </section>

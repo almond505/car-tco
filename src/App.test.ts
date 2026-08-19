@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   STORAGE_KEY,
+  clearSavedInputs,
   createDefaultInputs,
   loadInputs,
   saveInputs,
@@ -67,5 +68,17 @@ describe("persisted calculator inputs", () => {
     expect(storage.getItem(STORAGE_KEY)).toBe(
       JSON.stringify({ version: 1, inputs }),
     );
+  });
+
+  it("removes a valid snapshot when inputs are reset", () => {
+    const storage = memoryStorage();
+    const inputs = validInputs();
+    storage.setItem(STORAGE_KEY, JSON.stringify({ version: 1, inputs }));
+    vi.stubGlobal("localStorage", storage);
+
+    clearSavedInputs();
+
+    expect(storage.getItem(STORAGE_KEY)).toBeNull();
+    expect(loadInputs()).toEqual(createDefaultInputs());
   });
 });
