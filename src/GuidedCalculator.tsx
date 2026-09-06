@@ -97,6 +97,14 @@ interface OperatingEditorProps {
 }
 
 function OperatingEditor({ idPrefix, value, errors, onChange }: OperatingEditorProps) {
+  const coreFields = ["efficiencyKmPerUnit", "unitPrice", "insuranceAnnual", "maintenanceAnnual"];
+  const renderField = (field: typeof operatingFields[number]) => {
+    const path = idPrefix + "." + field.key;
+    return <NumberField key={field.key} id={path} label={field.label}
+      value={value[field.key]} suffix={field.suffix} error={errors[path]}
+      step={field.key === "unitPrice" || field.key === "efficiencyKmPerUnit" ? 0.01 : 1}
+      onChange={(next) => onChange({ ...value, [field.key]: next })} />;
+  };
   const updateCustom = (id: string, patch: Partial<CustomCost>) => {
     onChange({
       ...value,
@@ -125,21 +133,12 @@ function OperatingEditor({ idPrefix, value, errors, onChange }: OperatingEditorP
         </select>
       </label>
 
-      {operatingFields.map((field) => {
-        const path = idPrefix + "." + field.key;
-        return (
-          <NumberField
-            key={field.key}
-            id={path}
-            label={field.label}
-            value={value[field.key]}
-            suffix={field.suffix}
-            error={errors[path]}
-            onChange={(next) => onChange({ ...value, [field.key]: next })}
-          />
-        );
-      })}
-
+      {operatingFields.filter((field) => coreFields.includes(field.key)).map(renderField)}
+      <details className="optional-inputs" open={Object.keys(errors).some((path) => path.startsWith(idPrefix + ".") && !coreFields.includes(path.slice(idPrefix.length + 1)) ) || undefined}>
+        <summary>ค่าใช้จ่ายอื่น ๆ (ถ้ามี)</summary>
+        <p>ภาษี พ.ร.บ. ยาง ค่าที่จอด และค่าใช้จ่ายเพิ่มเติม — ข้อมูลเดิมยังรวมในผลคำนวณ</p>
+        <div className="operating-grid">
+          {operatingFields.filter((field) => !coreFields.includes(field.key)).map(renderField)}
       <div className="custom-costs">
         <h4>ค่าใช้จ่ายเพิ่มเติม</h4>
         {value.custom.map((cost, index) => {
@@ -209,6 +208,8 @@ function OperatingEditor({ idPrefix, value, errors, onChange }: OperatingEditorP
           เพิ่มค่าใช้จ่าย
         </button>
       </div>
+        </div>
+      </details>
     </div>
   );
 }
@@ -225,7 +226,7 @@ export default function GuidedCalculator({
   const setGlobal = (field: keyof CalculatorInputs["global"], value: number) =>
     onChange({ ...inputs, global: { ...inputs.global, [field]: value } });
   const setCurrentNumber = (
-    field: Exclude<keyof CalculatorInputs["current"], "name" | "operating">,
+    field: Exclude<keyof CalculatorInputs["current"], "name" | "operating" | "noCar">,
     value: number,
   ) => onChange({ ...inputs, current: { ...inputs.current, [field]: value } });
   const setNextNumber = (
@@ -252,6 +253,7 @@ export default function GuidedCalculator({
       </ol>
 
       <div className="stage-panel">
+        <p className="step-context">ขั้นตอน {activeStep + 1} จาก {steps.length} · {steps[activeStep]}</p>
         {activeStep === 0 && (
           <fieldset>
             <legend>ข้อมูลการเงินและการใช้งาน</legend>
@@ -260,7 +262,7 @@ export default function GuidedCalculator({
             <NumberField id="global.distanceMonthlyKm" label="ระยะทางต่อเดือน" value={inputs.global.distanceMonthlyKm} suffix="กม." error={errors["global.distanceMonthlyKm"]} onChange={(value) => setGlobal("distanceMonthlyKm", value)} />
             <label className="range-field" htmlFor="global.incomeCeilingPercent">
               <span>เพดานค่าเดินทาง {inputs.global.incomeCeilingPercent}% ของรายได้</span>
-              <input id="global.incomeCeilingPercent" type="range" min="10" max="40" step="1" value={inputs.global.incomeCeilingPercent} aria-invalid={Boolean(errors["global.incomeCeilingPercent"])} aria-describedby={errors["global.incomeCeilingPercent"] ? "global.incomeCeilingPercent-error" : undefined} onChange={(event) => setGlobal("incomeCeilingPercent", Number(event.target.value))} />
+              <input id="global.incomeCeilingPercent" type="range" min="10" max="100" step="1" value={inputs.global.incomeCeilingPercent} aria-invalid={Boolean(errors["global.incomeCeilingPercent"])} aria-describedby={errors["global.incomeCeilingPercent"] ? "global.incomeCeilingPercent-error" : undefined} onChange={(event) => setGlobal("incomeCeilingPercent", Number(event.target.value))} />
               {errors["global.incomeCeilingPercent"] && <small id="global.incomeCeilingPercent-error" className="field-error">{errors["global.incomeCeilingPercent"]}</small>}
               <small>10% คือเกณฑ์ดั้งเดิม ค่าสูงกว่านี้คือการปรับส่วนบุคคล</small>
             </label>
@@ -270,27 +272,44 @@ export default function GuidedCalculator({
         {activeStep === 1 && (
           <fieldset>
             <legend>รถปัจจุบัน</legend>
-            <label className="field" htmlFor="current.name"><span>ชื่อรถ</span><input id="current.name" value={inputs.current.name} onChange={(event) => onChange({ ...inputs, current: { ...inputs.current, name: event.target.value } })} /></label>
-            {([ ["marketValue", "มูลค่าขายปัจจุบัน", "บาท"], ["endValue", "มูลค่าเมื่อสิ้นสุดการถือครอง", "บาท"], ["outstandingPayoff", "ยอดปิดบัญชีปัจจุบัน", "บาท"], ["monthlyInstallment", "ค่างวดปัจจุบัน", "บาท/เดือน"], ["monthsRemaining", "จำนวนงวดคงเหลือ", "เดือน"], ["earlySettlementFee", "ค่าปิดบัญชีก่อนกำหนด", "บาท"], ] as const).map(([field, label, suffix]) => <NumberField key={field} id={"current." + field} label={label} value={inputs.current[field]} suffix={suffix} error={errors["current." + field]} onChange={(value) => setCurrentNumber(field, value)} />)}
+            <label className="no-car-toggle">
+              <input type="checkbox" checked={Boolean(inputs.current.noCar)} onChange={(event) => onChange({ ...inputs, current: { ...inputs.current, noCar: event.target.checked } })} />
+              <span>ไม่มีรถ</span>
+            </label>
+            {inputs.current.noCar ? <p className="no-car-note">ข้ามข้อมูลรถปัจจุบันได้เลย ระบบจะแสดงต้นทุนรถใหม่และความเหมาะสมกับรายได้ โดยไม่รวมค่าเดินทางอื่นก่อนซื้อรถ</p> : <>
+            {([ ["marketValue", "มูลค่าขายปัจจุบัน", "บาท"], ["endValue", "มูลค่าเมื่อสิ้นสุดการถือครอง", "บาท"], ] as const).map(([field, label, suffix]) => <NumberField key={field} id={"current." + field} label={label} value={inputs.current[field]} suffix={suffix} error={errors["current." + field]} onChange={(value) => setCurrentNumber(field, value)} />)}
+            <details className="optional-inputs" open={inputs.current.outstandingPayoff > 0 || inputs.current.monthlyInstallment > 0 || inputs.current.monthsRemaining > 0 || undefined}>
+              <summary>รถยังผ่อนอยู่ / มีค่าปิดบัญชี</summary>
+              <div className="operating-grid">
+                {([ ["outstandingPayoff", "ยอดปิดบัญชีปัจจุบัน", "บาท"], ["monthlyInstallment", "ค่างวดปัจจุบัน", "บาท/เดือน"], ["monthsRemaining", "จำนวนงวดคงเหลือ", "เดือน"], ["earlySettlementFee", "ค่าปิดบัญชีก่อนกำหนด", "บาท"], ] as const).map(([field, label, suffix]) => <NumberField key={field} id={"current." + field} label={label} value={inputs.current[field]} suffix={suffix} error={errors["current." + field]} onChange={(value) => setCurrentNumber(field, value)} />)}
+              </div>
+            </details>
             <OperatingEditor idPrefix="current.operating" value={inputs.current.operating} errors={errors} onChange={(operating) => onChange({ ...inputs, current: { ...inputs.current, operating } })} />
+            </>}
           </fieldset>
         )}
 
         {activeStep === 2 && (
           <fieldset>
             <legend>รถใหม่</legend>
-            <label className="field" htmlFor="next.name"><span>ชื่อรถ</span><input id="next.name" value={inputs.next.name} onChange={(event) => onChange({ ...inputs, next: { ...inputs.next, name: event.target.value } })} /></label>
-            {([ ["cashPrice", "ราคารถ", "บาท"], ["discount", "ส่วนลด", "บาท"], ["purchaseFees", "ค่าธรรมเนียมซื้อรถ", "บาท"], ["downPaymentPercent", "เงินดาวน์เป็นเปอร์เซ็นต์", "%"], ["flatRatePercent", "ดอกเบี้ย Flat Rate ต่อปี", "%"], ["financeMonths", "ระยะเวลาผ่อน", "เดือน"], ["endValue", "มูลค่าขายต่อปลายงวด", "บาท"], ] as const).map(([field, label, suffix]) => <NumberField key={field} id={"next." + field} label={label} value={inputs.next[field]} suffix={suffix} error={errors["next." + field]} max={field === "downPaymentPercent" ? 100 : undefined} step={field === "flatRatePercent" ? 0.01 : 1} onChange={(value) => setNextNumber(field, value)} />)}
-            <NumberField id="next.downPaymentAmount" label="เงินดาวน์เป็นจำนวนเงิน" value={netNewPrice * (inputs.next.downPaymentPercent / 100)} suffix="บาท" onChange={(amount) => setNextNumber("downPaymentPercent", netNewPrice > 0 ? (amount / netNewPrice) * 100 : 0)} />
+            {([ ["cashPrice", "ราคารถ", "บาท"], ["downPaymentPercent", "เงินดาวน์", "%"], ["flatRatePercent", "ดอกเบี้ย Flat Rate ต่อปี", "%"], ["financeMonths", "ระยะเวลาผ่อน", "เดือน"], ["endValue", "มูลค่าขายต่อปลายงวด", "บาท"], ] as const).filter(([field]) => inputs.next.downPaymentPercent < 100 || (field !== "flatRatePercent" && field !== "financeMonths")).map(([field, label, suffix]) => <NumberField key={field} id={"next." + field} label={label} value={inputs.next[field]} suffix={suffix} error={errors["next." + field]} max={field === "downPaymentPercent" ? 100 : undefined} step={field === "flatRatePercent" ? 0.01 : 1} onChange={(value) => setNextNumber(field, value)} />)}
+            <p className="input-note">เงินดาวน์ {new Intl.NumberFormat("th-TH").format(netNewPrice * inputs.next.downPaymentPercent / 100)} บาท · ซื้อเงินสดให้ตั้งดาวน์ 100%</p>
+            <details className="optional-inputs" open={Boolean(errors["next.discount"] || errors["next.purchaseFees"]) || undefined}>
+              <summary>ส่วนลดและค่าธรรมเนียม (ถ้ามี)</summary>
+              <div className="operating-grid">
+                <NumberField id="next.discount" label="ส่วนลด" value={inputs.next.discount} suffix="บาท" error={errors["next.discount"]} onChange={(value) => setNextNumber("discount", value)} />
+                <NumberField id="next.purchaseFees" label="ค่าธรรมเนียมซื้อรถ" value={inputs.next.purchaseFees} suffix="บาท" error={errors["next.purchaseFees"]} onChange={(value) => setNextNumber("purchaseFees", value)} />
+              </div>
+            </details>
             <OperatingEditor idPrefix="next.operating" value={inputs.next.operating} errors={errors} onChange={(operating) => onChange({ ...inputs, next: { ...inputs.next, operating } })} />
           </fieldset>
         )}
 
-        {activeStep === 3 && <div className="review-stage"><h3>ตรวจข้อมูลก่อนดูผล</h3><p>{Object.keys(errors).length === 0 ? "ข้อมูลพร้อมแล้ว ผลเปรียบเทียบแสดงด้านล่าง" : "ยังมีข้อมูลที่ต้องแก้ก่อนคำนวณ"}</p></div>}
+        {activeStep === 3 && <div className="review-stage"><h3>{Object.keys(errors).length === 0 ? "แผนค่าใช้จ่ายของคุณพร้อมแล้ว" : "ตรวจสอบข้อมูลอีกเล็กน้อย"}</h3><p>{Object.keys(errors).length === 0 ? "ดูต้นทุนรวมและความเหมาะสมกับรายได้ด้านล่าง" : "เลือกขั้นตอนเพื่อกลับไปเติมข้อมูลที่จำเป็น"}</p>{Object.keys(errors).length > 0 && <ul className="review-errors">{[0, 1, 2].map((step) => { const prefix = ["global.", "current.", "next."][step]; const count = Object.keys(errors).filter((key) => key.startsWith(prefix)).length; return count > 0 ? <li key={step}><button type="button" onClick={() => onStepChange(step)}>{steps[step]} · ต้องตรวจสอบ {count} รายการ <span aria-hidden="true">↗</span></button></li> : null; })}</ul>}</div>}
 
         <div className="stage-actions">
           <button type="button" disabled={activeStep === 0} onClick={() => onStepChange(activeStep - 1)}>ย้อนกลับ</button>
-          <button type="button" disabled={activeStep === steps.length - 1} onClick={() => onStepChange(activeStep + 1)}>ถัดไป</button>
+          {activeStep === steps.length - 1 ? <a className="primary-action" href="#results">ดูสรุปค่าใช้จ่าย <span aria-hidden="true">↓</span></a> : <button type="button" onClick={() => onStepChange(activeStep + 1)}>ถัดไป <span aria-hidden="true">→</span></button>}
         </div>
       </div>
     </div>

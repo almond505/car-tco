@@ -112,6 +112,7 @@ function isCalculatorInputs(value: unknown): value is CalculatorInputs {
       "distanceMonthlyKm",
     ]) &&
     typeof value.current.name === "string" &&
+    (value.current.noCar === undefined || typeof value.current.noCar === "boolean") &&
     hasNumbers(value.current, [
       "marketValue",
       "endValue",
@@ -195,20 +196,17 @@ export default function App() {
             stagger: 0.08,
             ease: "power3.out",
           });
-          ScrollTrigger.create({
-            trigger: ".results",
-            start: "top 96px",
-            end: "bottom bottom",
-            pin: ".verdict",
-            pinSpacing: false,
+          gsap.fromTo(".hero-media img", { scale: 0.92 }, {
+            scale: 1.04, opacity: 0.35,
+            scrollTrigger: { trigger: ".hero-media", start: "top 65%", end: "bottom top", scrub: true },
           });
           gsap.fromTo(
-            ".verdict p",
-            { opacity: 0.18 },
+            ".section-intro",
+            { opacity: 0.45 },
             {
               opacity: 1,
               scrollTrigger: {
-                trigger: ".results",
+                trigger: "#calculator",
                 start: "top 70%",
                 end: "top 25%",
                 scrub: true,
@@ -230,21 +228,22 @@ export default function App() {
   return (
     <main ref={root} className="app-shell">
       <nav className="floating-nav" aria-label="เมนูหลัก">
-        <a href="#top">ต้นทุนรถของคุณ</a>
+        <a className="brand" href="#top"><span className="brand-mark" aria-hidden="true">≋</span> ต้นทุนรถของคุณ</a>
         <a href="#calculator">เริ่มคำนวณ</a>
       </nav>
       <header id="top" className="hero">
         <div className="hero-copy">
-          <p>ตัดสินใจจากต้นทุนจริง</p>
+          <p>มองไกลกว่าราคารถ</p>
           <h1>
-            รถคันต่อไป
-            <span className="hero-inline-image" role="img" aria-label="รายละเอียดตัวถังรถ" />
-            <br className="hero-mobile-break" />
-            ควรคุ้มตั้งแต่วันแรก
+            เลือกรถที่ใช่<br />เข้าใจทุกค่าใช้จ่าย
           </h1>
-          <p>เปรียบเทียบต้นทุนจริง ภาระรายเดือน และจุดคุ้มทุนจากข้อมูลของคุณ</p>
-          <a className="primary-action" href="#calculator">เริ่มคำนวณ</a>
+          <p>วางแผนเงินดาวน์ ค่างวด และต้นทุนการเป็นเจ้าของ<br />เพื่อการตัดสินใจที่เหมาะกับรายได้ของคุณ</p>
+          <div className="hero-actions">
+            <a className="primary-action" href="#calculator">เริ่มวางแผนค่าใช้จ่าย <span aria-hidden="true">↗</span></a>
+            <a className="secondary-action" href="#method">ทำความเข้าใจวิธีคำนวณ</a>
+          </div>
         </div>
+        <div className="hero-media"><img src="/car-hero.jpg" alt="รถยนต์ Porsche สีดำกำลังขับบนถนน" fetchPriority="high" /><span>ทุกการเดินทาง เริ่มจากการวางแผนที่ดี</span></div>
         <div className="cost-marquee" aria-label="หมวดต้นทุนที่รองรับ">
           <div>
             <span>ค่างวด · พลังงาน · ประกัน · ภาษี · บำรุงรักษา · ราคาขายต่อ · </span>
@@ -253,7 +252,7 @@ export default function App() {
         </div>
       </header>
       <section id="calculator" aria-labelledby="calculator-title">
-        <h2 id="calculator-title">รู้ต้นทุนทุกบาท ก่อนเปลี่ยนรถ</h2>
+        <div className="section-intro"><span className="hero-inline-image" aria-hidden="true" /><h2 id="calculator-title">วางแผนรถคันต่อไป</h2><p>เริ่มจากข้อมูลสำคัญ ปรับตัวเลขได้ตลอดเวลา<br />ผลลัพธ์อัปเดตตามแผนของคุณ</p></div>
         <div className="calculator-workspace">
           <GuidedCalculator
             inputs={inputs}
@@ -272,11 +271,15 @@ export default function App() {
         result={result}
         holdingYears={inputs.global.holdingYears}
         incomeCeilingPercent={inputs.global.incomeCeilingPercent}
+        onIncomeCeilingChange={(incomeCeilingPercent) => setInputs((previous) => ({
+          ...previous,
+          global: { ...previous.global, incomeCeilingPercent },
+        }))}
       />
       <footer>
         <div>
           <p>ผลลัพธ์เป็นประมาณการจากข้อมูลที่กรอก ไม่ใช่การอนุมัติสินเชื่อหรือคำแนะนำทางการเงิน</p>
-          <details>
+          <details id="method">
             <summary>วิธีคำนวณและแหล่งอ้างอิง</summary>
             <p>ดอกเบี้ย Flat Rate คิดจากเงินต้นเต็มจำนวนตลอดอายุสัญญา</p>
             <a href="https://www.bot.or.th/th/satang-story/rights-responsibility/flat-effective.html">

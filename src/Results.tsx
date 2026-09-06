@@ -47,6 +47,8 @@ function formatBreakEven(month: number | null): string {
 }
 
 function verdict(result: ComparisonResult, holdingYears: number): string {
+  if (result.noCar) return "ต้นทุนรถใหม่รวม " + baht.format(result.next.tco) + " ใน " + holdingYears + " ปี " +
+    (result.affordability.customIncomePass ? "ภาระรายเดือนอยู่ในเพดานที่ตั้งไว้" : "ภาระรายเดือนเกินเพดานที่ตั้งไว้");
   const amount = baht.format(Math.abs(result.difference));
   const periodResult =
     result.winner === "new"
@@ -132,7 +134,8 @@ export function LiveSummary({
     <aside className="live-summary" aria-live="polite" aria-atomic="true">
       <p>ค่าใช้จ่ายเฉลี่ยรถใหม่</p>
       <strong>{result ? <AnimatedCurrency value={result.next.averageMonthlyTco} /> : "—"}</strong>
-      <span>ต่อเดือน</span>
+      <span>บาทต่อเดือน · เฉลี่ยตลอด {holdingYears} ปี</span>
+      <div className="summary-divider" />
       <p>{result ? verdict(result, holdingYears) : "ผลลัพธ์จะแสดงเมื่อข้อมูลที่จำเป็นครบ"}</p>
     </aside>
   );
@@ -198,12 +201,21 @@ function ScenarioTable({
   title: string;
   scenario: ScenarioResult;
 }) {
+  const allFixedRows: Array<[string, number]> = [
+    ["ค่าประกันภาคสมัครใจ", scenario.operating.fixedCosts.insurance],
+    ["ค่าประกัน พ.ร.บ.", scenario.operating.fixedCosts.compulsoryInsurance],
+    ["ภาษีรถยนต์", scenario.operating.fixedCosts.tax],
+    ["ค่าตรวจสภาพ", scenario.operating.fixedCosts.inspection],
+    ["ค่าบำรุงรักษา", scenario.operating.fixedCosts.maintenance],
+    ["ค่าซ่อมแซม", scenario.operating.fixedCosts.repairs],
+  ];
+  const fixedRows = allFixedRows.filter(([, value]) => value !== 0);
   const rows = [
     ["มูลค่ารถ", scenario.breakdown.acquisition],
     ["ดอกเบี้ย", scenario.breakdown.financeInterest],
     ["ค่าธรรมเนียม", scenario.breakdown.fees],
     ["พลังงาน", scenario.breakdown.energy],
-    ["ค่าใช้จ่ายรายปี", scenario.breakdown.fixed],
+    ...fixedRows,
     ["ยางและแบตเตอรี่", scenario.breakdown.periodic],
     ["ที่จอด ทางด่วน และดูแลรถ", scenario.breakdown.lifestyle],
     ["ค่าใช้จ่ายเพิ่มเติม", scenario.breakdown.custom],
@@ -487,36 +499,43 @@ export default function Results({
   result,
   holdingYears,
   incomeCeilingPercent,
+  onIncomeCeilingChange,
 }: {
   result: ComparisonResult | null;
   holdingYears: number;
   incomeCeilingPercent: number;
+  onIncomeCeilingChange: (value: number) => void;
 }) {
   if (!result) {
     return (
-      <section className="results results-empty" aria-live="polite">
-        <h2>ผลเปรียบเทียบ</h2>
-        <p>กรอกข้อมูลที่จำเป็นให้ครบเพื่อดูผลโดยไม่ใช้ค่าศูนย์แทนข้อมูลที่หายไป</p>
+      <section id="results" className="results results-empty" aria-live="polite">
+        <h2>ภาพรวมค่าใช้จ่ายของคุณ</h2>
+        <p>เมื่อข้อมูลครบ คุณจะเห็นต้นทุนรายเดือน ภาระเงินสด และความเหมาะสมกับรายได้ที่นี่</p>
       </section>
     );
   }
 
   const affordability: AffordabilityResult = result.affordability;
   return (
-    <section className="results" aria-labelledby="results-title">
+    <section id="results" className="results" aria-labelledby="results-title">
       <div className="verdict" aria-live="polite">
-        <h2 id="results-title">คำตัดสินจากต้นทุน</h2>
+        <h2 id="results-title">ภาพรวมค่าใช้จ่ายของคุณ</h2>
         <p>{verdict(result, holdingYears)}</p>
       </div>
 
       <div className="result-bento">
         <dl className="result-main">
-          <Metric label="ค่าใช้จ่ายเฉลี่ยรถปัจจุบัน" value={<><AnimatedCurrency value={result.current.averageMonthlyTco} /> / เดือน</>} emphasis />
+          {!result.noCar && <Metric label="ค่าใช้จ่ายเฉลี่ยรถปัจจุบัน" value={<><AnimatedCurrency value={result.current.averageMonthlyTco} /> / เดือน</>} emphasis />}
           <Metric label="ค่าใช้จ่ายเฉลี่ยรถใหม่" value={<><AnimatedCurrency value={result.next.averageMonthlyTco} /> / เดือน</>} emphasis />
-          <Metric label="ส่วนต่าง TCO" value={<AnimatedCurrency value={Math.abs(result.difference)} />} />
+          <Metric label={result.noCar ? "ต้นทุนรถใหม่รวม" : "ส่วนต่าง TCO"} value={<AnimatedCurrency value={result.noCar ? result.next.tco : Math.abs(result.difference)} />} />
         </dl>
         <div className="affordability">
           <h3>20/4/10 และเพดานของคุณ</h3>
+          <label className="range-field" htmlFor="results.incomeCeilingPercent">
+            <span>เพดานค่าเดินทาง {incomeCeilingPercent}% ของรายได้</span>
+            <input id="results.incomeCeilingPercent" type="range" min="10" max="100" step="1" value={incomeCeilingPercent} onChange={(event) => onIncomeCeilingChange(Number(event.target.value))} />
+            <small>10% คือเกณฑ์ดั้งเดิม ค่าสูงกว่านี้คือการปรับส่วนบุคคล</small>
+          </label>
           <p>ภาระรถคิดเป็น {affordability.incomeSharePercent.toFixed(1)}% ของรายได้รวมต่อเดือน</p>
           <ul>
             <Status pass={affordability.downPaymentPass}>ดาวน์อย่างน้อย 20%</Status>
@@ -526,8 +545,8 @@ export default function Results({
           </ul>
         </div>
         <dl className="switch-summary">
-          <Metric label="เงินสดวันเปลี่ยนรถ" value={<AnimatedCurrency value={result.switchDayCash} />} />
-          <Metric label="จุดคุ้มทุนกระแสเงินสด" value={formatBreakEven(result.breakEvenMonth)} />
+          <Metric label={result.noCar ? "เงินสดวันซื้อรถ" : "เงินสดวันเปลี่ยนรถ"} value={<AnimatedCurrency value={result.switchDayCash} />} />
+          {result.noCar ? <p>ไม่มีรถปัจจุบัน จึงไม่เปรียบเทียบจุดคุ้มทุนกับรถเดิม และไม่รวมค่าเดินทางก่อนซื้อรถ</p> : <Metric label="จุดคุ้มทุนกระแสเงินสด" value={formatBreakEven(result.breakEvenMonth)} />}
         </dl>
       </div>
       <dl className="secondary-metrics">
@@ -535,14 +554,14 @@ export default function Results({
         <Metric label="ค่างวดรถใหม่" value={<><AnimatedCurrency value={result.next.installment} /> / เดือน</>} />
         <Metric label="ภาระเงินสดรถใหม่ระหว่างผ่อน" value={<><AnimatedCurrency value={result.next.monthlyCashBurden} /> / เดือน</>} />
         <Metric label="ดอกเบี้ยรถใหม่ตลอดสัญญา" value={<AnimatedCurrency value={result.next.totalFinanceInterest} />} />
-        <Metric label="ภาระเงินสดรถปัจจุบัน" value={<><AnimatedCurrency value={result.current.monthlyCashBurden} /> / เดือน</>} />
+        {!result.noCar && <Metric label="ภาระเงินสดรถปัจจุบัน" value={<><AnimatedCurrency value={result.current.monthlyCashBurden} /> / เดือน</>} />}
       </dl>
 
-      <CostAccordion result={result} />
-      <ComparisonCharts result={result} />
+      {!result.noCar && <CostAccordion result={result} />}
+      {!result.noCar && <ComparisonCharts result={result} />}
 
       <div className="result-tables">
-        <ScenarioTable title={"ต้นทุนรถปัจจุบันใน " + holdingYears + " ปี"} scenario={result.current} />
+        {!result.noCar && <ScenarioTable title={"ต้นทุนรถปัจจุบันใน " + holdingYears + " ปี"} scenario={result.current} />}
         <ScenarioTable title={"ต้นทุนรถใหม่ใน " + holdingYears + " ปี"} scenario={result.next} />
       </div>
     </section>

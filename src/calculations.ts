@@ -36,6 +36,7 @@ export interface GlobalInputs {
 }
 
 export interface CurrentCarInputs {
+  noCar?: boolean;
   name: string;
   marketValue: number;
   endValue: number;
@@ -75,6 +76,14 @@ export interface LoanResult {
 export interface OperatingSummary {
   energyMonthly: number;
   fixedMonthly: number;
+  fixedCosts: {
+    insurance: number;
+    compulsoryInsurance: number;
+    tax: number;
+    inspection: number;
+    maintenance: number;
+    repairs: number;
+  };
   periodicMonthly: number;
   lifestyleMonthly: number;
   customRecurringMonthly: number;
@@ -117,6 +126,7 @@ export interface AffordabilityResult {
 }
 
 export interface ComparisonResult {
+  noCar?: boolean;
   current: ScenarioResult;
   next: ScenarioResult;
   difference: number;
@@ -179,8 +189,16 @@ export function calculateOperatingCosts(
       input.taxAnnual +
       input.inspectionAnnual +
       input.maintenanceAnnual +
-      input.repairsAnnual) /
+    input.repairsAnnual) /
     12;
+  const fixedCosts = {
+    insurance: input.insuranceAnnual * global.holdingYears,
+    compulsoryInsurance: input.compulsoryInsuranceAnnual * global.holdingYears,
+    tax: input.taxAnnual * global.holdingYears,
+    inspection: input.inspectionAnnual * global.holdingYears,
+    maintenance: input.maintenanceAnnual * global.holdingYears,
+    repairs: input.repairsAnnual * global.holdingYears,
+  };
   const periodicMonthly =
     (input.tiresAmount > 0 && input.tiresIntervalMonths > 0
       ? input.tiresAmount / input.tiresIntervalMonths
@@ -209,6 +227,7 @@ export function calculateOperatingCosts(
   return {
     energyMonthly,
     fixedMonthly,
+    fixedCosts,
     periodicMonthly,
     lifestyleMonthly,
     customRecurringMonthly,
@@ -247,6 +266,13 @@ function totalBreakdown(breakdown: CostBreakdown): number {
 export function calculateCurrentScenario(
   inputs: CalculatorInputs,
 ): ScenarioResult {
+  if (inputs.current.noCar) {
+    return calculateCurrentScenario({ ...inputs, current: {
+      name: "ไม่มีรถ", marketValue: 0, endValue: 0, outstandingPayoff: 0,
+      monthlyInstallment: 0, monthsRemaining: 0, earlySettlementFee: 0,
+      operating: createEmptyOperatingCosts(),
+    } });
+  }
   const holdingMonths = inputs.global.holdingYears * 12;
   const operating = calculateOperatingCosts(
     inputs.current.operating,
@@ -356,11 +382,11 @@ export function calculateComparison(
     loan.downPayment +
     inputs.next.purchaseFees +
     next.operating.oneTime +
-    inputs.current.outstandingPayoff +
-    inputs.current.earlySettlementFee -
-    inputs.current.marketValue;
+    (inputs.current.noCar ? 0 : inputs.current.outstandingPayoff +
+    inputs.current.earlySettlementFee - inputs.current.marketValue);
 
   return {
+    noCar: Boolean(inputs.current.noCar),
     current,
     next,
     difference,
@@ -371,7 +397,7 @@ export function calculateComparison(
           ? "new"
           : "current",
     switchDayCash,
-    breakEvenMonth: findBreakEvenMonth(switchDayCash, current, next),
+    breakEvenMonth: inputs.current.noCar ? null : findBreakEvenMonth(switchDayCash, current, next),
     affordability: {
       downPaymentPass: loan.downPayment >= loan.netPrice * 0.2,
       termPass: loan.principal === 0 || inputs.next.financeMonths <= 48,
@@ -459,10 +485,11 @@ export function validateInputs(inputs: CalculatorInputs): FieldErrors {
     errors["global.holdingYears"] = "ระยะเวลาถือครองต้องอยู่ระหว่าง 1–20 ปี";
   }
   if (
+    !Number.isFinite(inputs.global.incomeCeilingPercent) ||
     inputs.global.incomeCeilingPercent < 10 ||
-    inputs.global.incomeCeilingPercent > 40
+    inputs.global.incomeCeilingPercent > 100
   ) {
-    errors["global.incomeCeilingPercent"] = "เลือกเพดานระหว่าง 10–40%";
+    errors["global.incomeCeilingPercent"] = "เลือกเพดานระหว่าง 10–100%";
   }
   requireNonNegative(
     errors,
@@ -470,6 +497,7 @@ export function validateInputs(inputs: CalculatorInputs): FieldErrors {
     inputs.global.distanceMonthlyKm,
   );
 
+  if (!inputs.current.noCar) {
   const currentNumbers: Array<[string, number]> = [
     ["current.marketValue", inputs.current.marketValue],
     ["current.endValue", inputs.current.endValue],
@@ -500,6 +528,8 @@ export function validateInputs(inputs: CalculatorInputs): FieldErrors {
   }
   if (hasCurrentFinance && inputs.current.monthsRemaining <= 0) {
     errors["current.monthsRemaining"] = "กรุณาระบุจำนวนงวดคงเหลือ";
+  }
+  validateOperating(errors, "current.operating", inputs.current.operating);
   }
 
   const nextNumbers: Array<[string, number]> = [
@@ -532,13 +562,12 @@ export function validateInputs(inputs: CalculatorInputs): FieldErrors {
 
   if (
     (loan.principal > 0 && holdingMonths < inputs.next.financeMonths) ||
-    holdingMonths < inputs.current.monthsRemaining
+    (!inputs.current.noCar && holdingMonths < inputs.current.monthsRemaining)
   ) {
     errors["global.holdingYears"] =
       "ระยะเวลาถือครองต้องครอบคลุมระยะเวลาผ่อนทั้งหมด";
   }
 
-  validateOperating(errors, "current.operating", inputs.current.operating);
   validateOperating(errors, "next.operating", inputs.next.operating);
   return errors;
 }

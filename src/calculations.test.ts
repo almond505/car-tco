@@ -32,6 +32,22 @@ function newCar(): NewCarInputs {
 }
 
 describe("calculateFlatLoan", () => {
+  it("ignores retained current-car data when no car is selected", () => {
+    const input = comparisonInputs();
+    input.current.noCar = true;
+    input.current.marketValue = 0;
+    input.current.monthsRemaining = 999;
+    input.current.operating.efficiencyKmPerUnit = 0;
+    expect(validateInputs(input)).toEqual({});
+    const result = calculateComparison(input);
+    expect(result.noCar).toBe(true);
+    expect(result.current.tco).toBe(0);
+    expect(result.current.monthlyCashFlow.every((cost) => cost === 0)).toBe(true);
+    expect(result.switchDayCash).toBe(result.next.downPayment + input.next.purchaseFees + result.next.operating.oneTime);
+    expect(result.breakEvenMonth).toBeNull();
+    input.current.noCar = false;
+    expect(validateInputs(input)["current.marketValue"]).toBeTruthy();
+  });
   it("matches the BOT flat-rate example", () => {
     const result = calculateFlatLoan(newCar());
     expect(result.principal).toBe(100_000);
