@@ -73,6 +73,27 @@ export interface LoanResult {
   installment: number;
 }
 
+export type SimpleAffordability = "low" | "within" | "high";
+
+export interface SimplePlan {
+  months: number;
+  downPayment: number;
+  installment: number;
+  incomeSharePercent: number;
+  affordability: SimpleAffordability;
+}
+
+export interface SimplePlanRow {
+  downPaymentPercent: number;
+  plans: SimplePlan[];
+}
+
+export interface SimplePlansResult {
+  terms: number[];
+  rows: SimplePlanRow[];
+  recommendedDownPaymentPercent: number | null;
+}
+
 export interface OperatingSummary {
   energyMonthly: number;
   fixedMonthly: number;
@@ -160,7 +181,16 @@ export function createEmptyOperatingCosts(): OperatingCosts {
   };
 }
 
-export function calculateFlatLoan(input: NewCarInputs): LoanResult {
+export function calculateFlatLoan(
+  input: Pick<
+    NewCarInputs,
+    | "cashPrice"
+    | "discount"
+    | "downPaymentPercent"
+    | "flatRatePercent"
+    | "financeMonths"
+  >,
+): LoanResult {
   const netPrice = input.cashPrice - input.discount;
   const downPayment = netPrice * (input.downPaymentPercent / 100);
   const principal = netPrice - downPayment;
@@ -172,6 +202,50 @@ export function calculateFlatLoan(input: NewCarInputs): LoanResult {
       : 0;
 
   return { netPrice, downPayment, principal, totalInterest, installment };
+}
+
+export function calculateSimplePlans(
+  monthlyIncome: number,
+  carPrice: number,
+  interestRatePercent: number,
+): SimplePlansResult {
+  const terms = [48, 60, 72, 84];
+  const rows = Array.from({ length: 9 }, (_, index) => {
+    const downPaymentPercent = 10 + index * 5;
+    const plans = terms.map((months) => {
+      const loan = calculateFlatLoan({
+        cashPrice: carPrice,
+        discount: 0,
+        downPaymentPercent,
+        flatRatePercent: interestRatePercent,
+        financeMonths: months,
+      });
+      const incomeSharePercent = monthlyIncome > 0
+        ? (loan.installment / monthlyIncome) * 100
+        : Number.POSITIVE_INFINITY;
+      const affordability: SimpleAffordability = incomeSharePercent < 20
+        ? "low"
+        : incomeSharePercent <= 30
+          ? "within"
+          : "high";
+      return {
+        months,
+        downPayment: loan.downPayment,
+        installment: loan.installment,
+        incomeSharePercent,
+        affordability,
+      };
+    });
+    return { downPaymentPercent, plans };
+  });
+  const recommendedRow = rows.find((row) => row.plans[0].incomeSharePercent <= 30);
+
+  return {
+    terms,
+    rows,
+    recommendedDownPaymentPercent:
+      recommendedRow?.downPaymentPercent ?? null,
+  };
 }
 
 export function calculateOperatingCosts(

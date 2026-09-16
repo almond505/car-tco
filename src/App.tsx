@@ -12,6 +12,7 @@ import {
 } from "./calculations";
 import GuidedCalculator from "./GuidedCalculator";
 import Results, { LiveSummary } from "./Results";
+import SimpleCalculator from "./SimpleCalculator";
 
 gsap.registerPlugin(useGSAP, ScrollTrigger);
 
@@ -169,6 +170,7 @@ export function clearSavedInputs(): void {
 }
 
 export default function App() {
+  const [mode, setMode] = useState<"simple" | "advanced">("simple");
   const [inputs, setInputs] = useState<CalculatorInputs>(loadInputs);
   const [activeStep, setActiveStep] = useState(0);
   const root = useRef<HTMLElement>(null);
@@ -213,6 +215,21 @@ export default function App() {
               },
             },
           );
+          gsap.fromTo(
+            ".simple-guidance > *",
+            { opacity: 0.15, y: 14 },
+            {
+              opacity: 1,
+              y: 0,
+              stagger: 0.08,
+              scrollTrigger: {
+                trigger: ".simple-guidance",
+                start: "top 85%",
+                end: "top 58%",
+                scrub: true,
+              },
+            },
+          );
         },
       );
       return () => media.revert();
@@ -252,30 +269,62 @@ export default function App() {
         </div>
       </header>
       <section id="calculator" aria-labelledby="calculator-title">
-        <div className="section-intro"><span className="hero-inline-image" aria-hidden="true" /><h2 id="calculator-title">วางแผนรถคันต่อไป</h2><p>เริ่มจากข้อมูลสำคัญ ปรับตัวเลขได้ตลอดเวลา<br />ผลลัพธ์อัปเดตตามแผนของคุณ</p></div>
-        <div className="calculator-workspace">
-          <GuidedCalculator
-            inputs={inputs}
-            errors={errors}
-            activeStep={activeStep}
-            onStepChange={setActiveStep}
-            onChange={setInputs}
-          />
-          <LiveSummary result={result} holdingYears={inputs.global.holdingYears} />
+        <div className="mode-tabs" role="tablist" aria-label="รูปแบบเครื่องคำนวณ">
+          <button
+            id="simple-tab"
+            type="button"
+            role="tab"
+            aria-selected={mode === "simple"}
+            aria-controls="simple-panel"
+            onClick={() => setMode("simple")}
+          >
+            Simple
+          </button>
+          <button
+            id="advanced-tab"
+            type="button"
+            role="tab"
+            aria-selected={mode === "advanced"}
+            aria-controls="advanced-panel"
+            onClick={() => setMode("advanced")}
+          >
+            Advanced
+          </button>
         </div>
-        <button className="text-action" type="button" onClick={handleReset}>
-          ล้างข้อมูล
-        </button>
+        <div className="section-intro"><span className="hero-inline-image" aria-hidden="true" /><h2 id="calculator-title">{mode === "simple" ? "รู้ค่างวดที่เหมาะกับคุณ" : "วางแผนต้นทุนรถแบบละเอียด"}</h2><p>{mode === "simple" ? "กรอกรายได้และราคารถ เปรียบเทียบทุกแผนได้ในตารางเดียว" : "คำนวณรถปัจจุบัน รถใหม่ และค่าใช้จ่ายตลอดการถือครอง"}<br />ผลลัพธ์อัปเดตตามแผนของคุณ</p></div>
+        {mode === "simple" ? (
+          <div id="simple-panel" role="tabpanel" aria-labelledby="simple-tab">
+            <SimpleCalculator />
+          </div>
+        ) : (
+          <div id="advanced-panel" role="tabpanel" aria-labelledby="advanced-tab">
+            <div className="calculator-workspace">
+              <GuidedCalculator
+                inputs={inputs}
+                errors={errors}
+                activeStep={activeStep}
+                onStepChange={setActiveStep}
+                onChange={setInputs}
+              />
+              <LiveSummary result={result} holdingYears={inputs.global.holdingYears} />
+            </div>
+            <button className="text-action" type="button" onClick={handleReset}>
+              ล้างข้อมูล
+            </button>
+          </div>
+        )}
       </section>
-      <Results
-        result={result}
-        holdingYears={inputs.global.holdingYears}
-        incomeCeilingPercent={inputs.global.incomeCeilingPercent}
-        onIncomeCeilingChange={(incomeCeilingPercent) => setInputs((previous) => ({
-          ...previous,
-          global: { ...previous.global, incomeCeilingPercent },
-        }))}
-      />
+      {mode === "advanced" && (
+        <Results
+          result={result}
+          holdingYears={inputs.global.holdingYears}
+          incomeCeilingPercent={inputs.global.incomeCeilingPercent}
+          onIncomeCeilingChange={(incomeCeilingPercent) => setInputs((previous) => ({
+            ...previous,
+            global: { ...previous.global, incomeCeilingPercent },
+          }))}
+        />
+      )}
       <footer>
         <div>
           <p>ผลลัพธ์เป็นประมาณการจากข้อมูลที่กรอก ไม่ใช่การอนุมัติสินเชื่อหรือคำแนะนำทางการเงิน</p>

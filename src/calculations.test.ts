@@ -3,12 +3,48 @@ import {
   calculateComparison,
   calculateFlatLoan,
   calculateOperatingCosts,
+  calculateSimplePlans,
   createEmptyOperatingCosts,
   validateInputs,
   type CalculatorInputs,
   type GlobalInputs,
   type NewCarInputs,
 } from "./calculations";
+
+describe("calculateSimplePlans", () => {
+  it("builds every down-payment and term option with flat-rate installments", () => {
+    const result = calculateSimplePlans(50_000, 1_000_000, 3);
+
+    expect(result.rows.map((row) => row.downPaymentPercent)).toEqual([
+      10, 15, 20, 25, 30, 35, 40, 45, 50,
+    ]);
+    expect(result.terms).toEqual([48, 60, 72, 84]);
+    expect(result.rows[2].plans[1]).toMatchObject({
+      months: 60,
+      downPayment: 200_000,
+      installment: 15_333.333333333334,
+      affordability: "high",
+    });
+    expect(result.rows[2].plans[1].incomeSharePercent).toBeCloseTo(30.67, 2);
+  });
+
+  it("recommends the lowest down payment with a 48-month installment at or below 30% of income", () => {
+    const result = calculateSimplePlans(50_000, 1_000_000, 0);
+
+    expect(result.recommendedDownPaymentPercent).toBe(30);
+    expect(result.rows[4].plans[0]).toMatchObject({
+      installment: 14_583.333333333334,
+      affordability: "within",
+    });
+  });
+
+  it("returns no recommendation when every 48-month option exceeds 30% of income", () => {
+    expect(
+      calculateSimplePlans(25_000, 1_000_000, 0)
+        .recommendedDownPaymentPercent,
+    ).toBeNull();
+  });
+});
 
 const global: GlobalInputs = {
   grossIncomeMonthly: 45_000,
