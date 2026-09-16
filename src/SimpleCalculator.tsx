@@ -70,10 +70,11 @@ export default function SimpleCalculator() {
     [incomeValue, carPriceValue, interestRate],
   );
   const recommendation = result?.recommendedDownPaymentPercent == null
+      || result.recommendedMonths == null
     ? null
     : result.rows.find(
       (row) => row.downPaymentPercent === result.recommendedDownPaymentPercent,
-    )?.plans[0];
+    )?.plans.find((plan) => plan.months === result.recommendedMonths);
 
   return (
     <div className="simple-calculator">
@@ -115,7 +116,7 @@ export default function SimpleCalculator() {
         {result && recommendation && (
           <>
             <p>
-              แผนแนะนำ: ดาวน์ {result.recommendedDownPaymentPercent}% ผ่อน 48 เดือน
+              แผนแนะนำ: ดาวน์ {result.recommendedDownPaymentPercent}% ผ่อน {result.recommendedMonths} เดือน
             </p>
             <strong>{money.format(recommendation.installment)} / เดือน</strong>
             <span>
@@ -128,7 +129,7 @@ export default function SimpleCalculator() {
         )}
         {result && !recommendation && (
           <>
-            <p>ยังไม่มีแผน 48 เดือนที่ค่างวดไม่เกิน 30% ของรายได้</p>
+            <p>ยังไม่มีแผนที่ค่างวดอยู่ในช่วง 20–30% ของรายได้</p>
             <span>เพิ่มเงินดาวน์ ลดราคารถ หรือเลือกดูระยะผ่อนที่ยาวขึ้น</span>
           </>
         )}

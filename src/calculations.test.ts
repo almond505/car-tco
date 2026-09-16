@@ -28,21 +28,31 @@ describe("calculateSimplePlans", () => {
     expect(result.rows[2].plans[1].incomeSharePercent).toBeCloseTo(30.67, 2);
   });
 
-  it("recommends the lowest down payment with a 48-month installment at or below 30% of income", () => {
+  it("recommends the highest down payment within 20–30% for the shortest term", () => {
     const result = calculateSimplePlans(50_000, 1_000_000, 0);
 
-    expect(result.recommendedDownPaymentPercent).toBe(30);
-    expect(result.rows[4].plans[0]).toMatchObject({
-      installment: 14_583.333333333334,
+    expect(result.recommendedDownPaymentPercent).toBe(50);
+    expect(result.recommendedMonths).toBe(48);
+    expect(result.rows[8].plans[0]).toMatchObject({
+      installment: 10_416.666666666666,
       affordability: "within",
     });
   });
 
-  it("returns no recommendation when every 48-month option exceeds 30% of income", () => {
+  it("moves to the next term when no 48-month plan is within range", () => {
+    const result = calculateSimplePlans(30_000, 1_000_000, 0);
+
+    expect(result.recommendedDownPaymentPercent).toBe(50);
+    expect(result.recommendedMonths).toBe(60);
+  });
+
+  it("returns no recommendation when every term exceeds 30% of income", () => {
     expect(
-      calculateSimplePlans(25_000, 1_000_000, 0)
-        .recommendedDownPaymentPercent,
-    ).toBeNull();
+      calculateSimplePlans(15_000, 1_000_000, 0),
+    ).toMatchObject({
+      recommendedDownPaymentPercent: null,
+      recommendedMonths: null,
+    });
   });
 });
 

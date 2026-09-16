@@ -92,6 +92,7 @@ export interface SimplePlansResult {
   terms: number[];
   rows: SimplePlanRow[];
   recommendedDownPaymentPercent: number | null;
+  recommendedMonths: number | null;
 }
 
 export interface OperatingSummary {
@@ -238,13 +239,24 @@ export function calculateSimplePlans(
     });
     return { downPaymentPercent, plans };
   });
-  const recommendedRow = rows.find((row) => row.plans[0].incomeSharePercent <= 30);
+  let recommendedRow: SimplePlanRow | undefined;
+  let recommendedMonths: number | null = null;
+  for (const [planIndex, months] of terms.entries()) {
+    recommendedRow = [...rows]
+      .reverse()
+      .find((row) => row.plans[planIndex].affordability === "within");
+    if (recommendedRow) {
+      recommendedMonths = months;
+      break;
+    }
+  }
 
   return {
     terms,
     rows,
     recommendedDownPaymentPercent:
       recommendedRow?.downPaymentPercent ?? null,
+    recommendedMonths,
   };
 }
 
